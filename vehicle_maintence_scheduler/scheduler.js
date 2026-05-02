@@ -9,27 +9,32 @@ const Log = require("../logging_middleware/logger");
         const vehiclesRes = await fetchVehicles();
         const depotsRes = await fetchDepots();
 
-        console.log("DEPOTS RESPONSE:", depotsRes);
-        console.log("VEHICLES RESPONSE:", vehiclesRes);
+        await Log("backend", "info", "service", "data fetched");
 
-
+       
         const vehiclesRaw =
             vehiclesRes.vehicles || vehiclesRes.data || vehiclesRes;
 
         if (!Array.isArray(vehiclesRaw)) {
+            await Log("backend", "error", "service", "invalid vehicles");
             throw new Error("vehicles not array");
         }
 
-
         const vehicles = vehiclesRaw.map(v => ({
-            maintenanceTime: v.maintenanceTime || v.maintenance_time,
-            importanceScore: v.importanceScore || v.importance_score
+            maintenanceTime: v.Duration,
+            importanceScore: v.Impact
         }));
 
+        const vehiclesFiltered = vehicles.filter(
+            v => v.maintenanceTime > 0 && v.importanceScore > 0
+        );
+
+        await Log("backend", "info", "service", "vehicles ready");
 
         const depots = depotsRes.depots;
 
         if (!depots || depots.length === 0) {
+            await Log("backend", "error", "service", "no depot data");
             throw new Error("no depot data");
         }
 
@@ -37,16 +42,24 @@ const Log = require("../logging_middleware/logger");
 
         await Log("backend", "info", "service", "hours ready");
 
-        const result = knapsackWithSelection(vehicles, maxHours);
+        const result = knapsackWithSelection(vehiclesFiltered, maxHours);
 
         await Log("backend", "info", "service", "scheduler done");
 
-        console.log("\n===== FINAL RESULT =====");
+        console.log("\n===== VEHICLE MAINTENANCE RESULT =====");
+        console.log("Total Mechanic Hours:", maxHours);
         console.log("Max Importance Score:", result.maxScore);
-        console.log("Selected Vehicles:", result.selectedVehicles);
+        console.log("Number of Vehicles Selected:", result.selectedVehicles.length);
+
+        console.log("\nSelected Vehicles:");
+        result.selectedVehicles.forEach((v, index) => {
+            console.log(
+                `#${index + 1} -> Time: ${v.maintenanceTime}, Score: ${v.importanceScore}`
+            );
+        });
 
     } catch (err) {
         await Log("backend", "error", "controller", "scheduler failed");
-        console.error(err.message);
+        console.error("Error:", err.message);
     }
 })();
